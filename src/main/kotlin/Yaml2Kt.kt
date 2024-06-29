@@ -1,6 +1,7 @@
 package org.example
 
 import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.yaml.snakeyaml.Yaml
 import java.io.File
 
@@ -28,16 +29,17 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                 it
         }
 
-    data class BuildTypeResult(
+    data class BuildTypeFromMapResult(
         val typeSpec: TypeSpec,
         val propertySpec: PropertySpec?
     )
 
+    @Suppress("UNCHECKED_CAST")
     private fun buildTypeFromMap(
         map: Map<String, Any>,
         name: String,
         type: TypeType
-    ): BuildTypeResult {
+    ): BuildTypeFromMapResult {
         val typeBuilder = when (type) {
             TypeType.OBJECT ->
                 TypeSpec.objectBuilder(name.kotlinifyIdentifier(true))
@@ -61,13 +63,12 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                     }
 
                     is List<*> -> {
-                        val subType = buildTypeFromMap(
-                            value.mapIndexed { i, it -> i.toString() to it }.toMap() as Map<String, Any>,
-                            key,
-                            TypeType.DATA_CLASS
+                        val subType = buildListOfDataClassFromList(
+                            value as List<Any>,
+                            key
                         )
-                        typeBuilder.addType(subType.typeSpec)
-                        subType.propertySpec?.let { add(it) }
+                        subType.typeSpec?.let { typeBuilder.addType(it) }
+                        add(subType.propertySpec)
                     }
 
                     is String -> {
@@ -101,7 +102,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                 typeBuilder.addProperties(properties.map { it.toBuilder().initializer(it.name).build() })
 
                 // create the actual property
-                BuildTypeResult(
+                BuildTypeFromMapResult(
                     typeBuilder.build(),
                     PropertySpec.builder(name.kotlinifyIdentifier(), ClassName("", name.kotlinifyIdentifier(true)))
                         .initializer(
@@ -114,9 +115,94 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
 
             TypeType.OBJECT -> {
                 typeBuilder.addProperties(properties)
-                BuildTypeResult(typeBuilder.build(), null)
+                BuildTypeFromMapResult(typeBuilder.build(), null)
             }
         }
+    }
+
+    data class BuildTypeFromListResult(
+        val typeSpec: TypeSpec?,
+        val propertySpec: PropertySpec
+    )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun buildListOfDataClassFromList(
+        list: List<Any>,
+        name: String
+    ): BuildTypeFromListResult {
+        val typeOfList: TypeSpec? = if (list.isEmpty())
+            TypeSpec.objectBuilder(name.kotlinifyIdentifier(true)).build()
+        else when (val value = list.first()) {
+            is Map<*, *> -> {
+                val subType = buildTypeFromMap(
+                    value.mapKeys { (key, _) -> key.toString() } as Map<String, Any>,
+                    name,
+                    TypeType.DATA_CLASS
+                )
+                subType.typeSpec
+            }
+
+            is List<*> -> {
+                val subType = buildListOfDataClassFromList(
+                    value as List<Any>,
+                    name
+                )
+                subType.typeSpec
+            }
+
+            else -> {
+                null
+            }
+        }
+
+        val propOfList = PropertySpec.builder(
+            name.kotlinifyIdentifier(),
+            LIST.parameterizedBy(
+                if (typeOfList != null)
+                    ClassName("", name.kotlinifyIdentifier(true))
+                else
+                    list.first()::class.asClassName()
+            )
+        ).let { propOfList ->
+            if (list.isEmpty())
+                propOfList.initializer(CodeBlock.of("emptyList()"))
+            else {
+                val listPropsCodeBlocks = when (list.first()) {
+                    is Map<*, *> -> {
+                        list.map {
+                            buildTypeFromMap(
+                                (it as Map<Any, Any>).mapKeys { (key, _) -> key.toString() },
+                                name,
+                                TypeType.DATA_CLASS
+                            ).propertySpec?.initializer
+                        }
+                    }
+
+                    is List<*> -> {
+                        list.map {
+                            buildListOfDataClassFromList(
+                                it as List<Any>,
+                                name
+                            ).propertySpec.initializer
+                        }
+                    }
+
+                    is String -> {
+                        list.map { CodeBlock.of("%S", it) }
+                    }
+
+                    else -> {
+                        list.map { CodeBlock.of("%L", it) }
+                    }
+                }
+                propOfList.initializer("listOf(" + "%L, ".repeat(list.size - 1) + "%L)", *listPropsCodeBlocks.toTypedArray())
+            }
+        }.build()
+
+        return BuildTypeFromListResult(
+            typeSpec = typeOfList,
+            propertySpec = propOfList
+        )
     }
 
 }

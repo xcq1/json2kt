@@ -3,7 +3,7 @@ import io.kotest.matchers.shouldBe
 import org.example.Yaml2Kt
 import java.io.File
 
-class Test : DescribeSpec( {
+class SimpleTest : DescribeSpec( {
     describe("simple") {
         it("works") {
             val targetDir = File("build/test").also {it.mkdirs()}
@@ -13,6 +13,7 @@ class Test : DescribeSpec( {
                 import kotlin.Double
                 import kotlin.Int
                 import kotlin.String
+                import kotlin.collections.List
                 
                 public object Simple {
                   public val id: String = "Simple"
@@ -27,19 +28,10 @@ class Test : DescribeSpec( {
                 
                   public val frenchHens: Int = 3
                 
-                  public val callingBirds: CallingBirds = CallingBirds("calling-birds", "huey", "dewey", "louie",
-                      "fred")
+                  public val callingBirds: List<String> = listOf("huey", "dewey", "louie", "fred")
                 
                   public val xmasFifthDay: XmasFifthDay = XmasFifthDay("xmas-fifth-day", "four", 3, 5,
                       Partridges("partridges", 1, "a pear tree"), "two")
-                
-                  public data class CallingBirds private constructor(
-                    public val id: String,
-                    public val `0`: String,
-                    public val `1`: String,
-                    public val `2`: String,
-                    public val `3`: String,
-                  )
                 
                   public data class XmasFifthDay private constructor(
                     public val id: String,
@@ -56,7 +48,7 @@ class Test : DescribeSpec( {
                     )
                   }
                 }
-
+                
             """.trimIndent()
         }
     }
