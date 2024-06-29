@@ -8,6 +8,16 @@ calling-birds:
   - dewey
   - louie
   - fred
+emails:
+  - from: a
+    to: b
+    subject: short letters
+  - from: alice
+    to: bob
+    subject: physics experiment
+  - from: kotlin-newsletter
+    to: me
+    subject: kotlin
 xmas-fifth-day:
   calling-birds: four
   french-hens: 3

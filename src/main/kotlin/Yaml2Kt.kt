@@ -100,6 +100,21 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                 }
                 typeBuilder.primaryConstructor(primaryConstructor.build())
                 typeBuilder.addProperties(properties.map { it.toBuilder().initializer(it.name).build() })
+                typeBuilder.addType(
+                    TypeSpec.companionObjectBuilder()
+                        .addProperty(
+                            PropertySpec.builder(
+                                "instance",
+                                ClassName("", name.kotlinifyIdentifier(true))
+                            )
+                                .initializer(
+                                    "%L",
+                                    "${name.kotlinifyIdentifier(true)}(${properties.joinToString { it.initializer.toString() }})"
+                                )
+                                .build()
+                        )
+                        .build()
+                )
 
                 // create the actual property
                 BuildTypeFromMapResult(
@@ -107,7 +122,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                     PropertySpec.builder(name.kotlinifyIdentifier(), ClassName("", name.kotlinifyIdentifier(true)))
                         .initializer(
                             "%L",
-                            "${name.kotlinifyIdentifier(true)}(${properties.joinToString { it.initializer.toString() }})"
+                            "${name.kotlinifyIdentifier(true)}.instance"
                         )
                         .build()
                 )
@@ -195,7 +210,10 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                         list.map { CodeBlock.of("%L", it) }
                     }
                 }
-                propOfList.initializer("listOf(" + "%L, ".repeat(list.size - 1) + "%L)", *listPropsCodeBlocks.toTypedArray())
+                propOfList.initializer(
+                    "listOf(" + "%L, ".repeat(list.size - 1) + "%L)",
+                    *listPropsCodeBlocks.toTypedArray()
+                )
             }
         }.build()
 
