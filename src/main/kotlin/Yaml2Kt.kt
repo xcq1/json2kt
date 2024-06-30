@@ -145,13 +145,15 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
         list: List<Any>,
         name: String
     ): BuildTypeFromListResult {
+        val singleName = name.removeSuffix("s")
+
         val typeOfList: TypeSpec? = if (list.isEmpty())
             TypeSpec.objectBuilder(name.kotlinifyIdentifier(true)).build()
         else when (val value = list.first()) {
             is Map<*, *> -> {
                 val subType = buildTypeFromMap(
                     value.mapKeys { (key, _) -> key.toString() } as Map<String, Any>,
-                    name,
+                    singleName,
                     TypeType.DATA_CLASS
                 )
                 subType.typeSpec
@@ -160,7 +162,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
             is List<*> -> {
                 val subType = buildListOfDataClassFromList(
                     value as List<Any>,
-                    name
+                    singleName
                 )
                 subType.typeSpec
             }
@@ -174,7 +176,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
             name.kotlinifyIdentifier(),
             LIST.parameterizedBy(
                 if (typeOfList != null)
-                    ClassName("", name.kotlinifyIdentifier(true))
+                    ClassName("", singleName.kotlinifyIdentifier(true))
                 else
                     list.first()::class.asClassName()
             )
@@ -187,7 +189,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                         list.map {
                             buildTypeFromMap(
                                 (it as Map<Any, Any>).mapKeys { (key, _) -> key.toString() },
-                                name,
+                                singleName,
                                 TypeType.DATA_CLASS
                             ).propertySpec?.initializer
                         }
@@ -197,7 +199,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File) {
                         list.map {
                             buildListOfDataClassFromList(
                                 it as List<Any>,
-                                name
+                                singleName
                             ).propertySpec.initializer
                         }
                     }
