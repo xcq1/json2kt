@@ -1,4 +1,4 @@
-package org.example
+package com.xcq1
 
 import java.io.File
 import kotlin.system.exitProcess

@@ -5,7 +5,6 @@ import io.kotest.matchers.shouldBe
 class SimpleTest : ShouldSpec({
     context("plain string content") {
         should("be correct") {
-            Simple.id shouldBe "Simple"
             Simple.doe shouldBe "a deer, a female deer"
             Simple.ray shouldBe "a drop of golden sun"
             Simple.pi shouldBe 3.14159

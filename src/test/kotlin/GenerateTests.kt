@@ -1,5 +1,5 @@
+import com.xcq1.Yaml2Kt
 import io.kotest.core.spec.style.DescribeSpec
-import org.example.Yaml2Kt
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Paths
