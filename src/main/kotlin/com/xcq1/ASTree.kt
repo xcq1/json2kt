@@ -1,7 +1,6 @@
 package com.xcq1
 
 import com.squareup.kotlinpoet.*
-import java.lang.reflect.Type
 
 interface ASTNode<T> {
     val name: String
@@ -46,7 +45,7 @@ data class ASTProperty<E : ASTProperty.Expression>(
                         0 -> "emptyList()"
                         else -> if (expression.primitives.first() is String)
                             "listOf(" + "%S, ".repeat(expression.primitives.size - 1) + "%S)"
-                            else
+                        else
                             "listOf(" + "%L, ".repeat(expression.primitives.size - 1) + "%L)"
                     },
                     *(expression.primitives.map { it.toString() }).toTypedArray()

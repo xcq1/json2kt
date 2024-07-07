@@ -22,10 +22,10 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
         val primitives: List<Map.Entry<String, Any?>>,
         val maps: List<Map.Entry<String, Map<*, *>>>,
         val lists: List<Map.Entry<String, List<*>>>,
-        val properties: List<ASTProperty<out ASTProperty.Expression>>
+        val allProperties: List<ASTProperty<out ASTProperty.Expression>>
     )
 
-    private fun generateTypeProperties(parserMap: Map<String, *>): TypePropertiesSummary {
+    private fun partitionTypesAndGenerateProperties(parserMap: Map<String, *>): TypePropertiesSummary {
         val primitives = parserMap.entries.filter { (_, value) -> value !is Map<*, *> && value !is List<*> }
 
         @Suppress("UNCHECKED_CAST")
@@ -77,7 +77,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
     }
 
     private fun convertParserMapToASTObject(parserMap: Map<String, Any?>, baseObjectName: String): ASTObject {
-        val (primitives, maps, lists, properties) = generateTypeProperties(parserMap)
+        val (primitives, maps, lists, properties) = partitionTypesAndGenerateProperties(parserMap)
         return ASTObject(
             name = baseObjectName.kotlinifyIdentifier(true),
             properties = properties,
@@ -92,7 +92,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
     }
 
     private fun convertMapToASTDataClass(parserMap: Map<String, Any?>, dataClassName: String): ASTDataClass {
-        val (primitives, maps, lists, properties) = generateTypeProperties(parserMap)
+        val (primitives, maps, lists, properties) = partitionTypesAndGenerateProperties(parserMap)
         return ASTDataClass(
             name = dataClassName.kotlinifyIdentifier(true),
             valueParameters = listOf(
@@ -133,7 +133,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
                                                         .removeSuffix("s") + ".instance${it}"
                                                 }
                                             else
-                                                list.value.joinToString { 
+                                                list.value.joinToString {
                                                     if (it is String) "\"$it\"" else it.toString()
                                                 }
                                         })"
@@ -149,7 +149,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
         val elementToMakeTypeOutOf = parserList.firstOrNull() ?: error("TODO handle empty list")
         require(elementToMakeTypeOutOf is Map<*, *>) { "Cannot make primitive list to data class" }
         val (primitives, maps, lists, properties) = @Suppress("UNCHECKED_CAST")
-        generateTypeProperties(elementToMakeTypeOutOf as Map<String, *>)
+        partitionTypesAndGenerateProperties(elementToMakeTypeOutOf as Map<String, *>)
 
         return ASTDataClass(
             name = dataClassName.kotlinifyIdentifier(true),
@@ -172,7 +172,7 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
             companionObject = ASTCompanionObject(
                 properties = parserList.mapIndexed { index, it ->
                     val (primitivesOfIt, mapsOfIt, listsOfIt) = @Suppress("UNCHECKED_CAST")
-                    generateTypeProperties(it as Map<String, *>)
+                    partitionTypesAndGenerateProperties(it as Map<String, *>)
 
                     ASTProperty(
                         "instance$index",
