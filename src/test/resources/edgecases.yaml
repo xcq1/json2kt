@@ -1,0 +1,14 @@
+null: null
+null-list:
+  - null
+empty-list: [ ]
+null-mapping:
+  null: null
+empty-mapping: { }
+mapping-on-numbers:
+  3: "three"
+  2: "two"
+  1: "one"
+  0: "we have lift-off"
+nested-list:
+  - - - - - - - - - - - - - - - - - - - - - - - - worst: "idea ever"
