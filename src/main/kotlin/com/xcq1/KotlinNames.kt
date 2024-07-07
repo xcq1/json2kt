@@ -8,7 +8,7 @@ value class KotlinParameterName(val originalValue: Any?) {
             is String ->
                 originalValue.replace("-([a-z])".toRegex()) { it.groupValues[1].uppercase() }
 
-            else -> "_{${toString()}}"
+            else -> "_${originalValue.toString()}"
         }
 
     companion object {
@@ -25,7 +25,7 @@ value class KotlinTypeName(val originalValue: Any?) {
                     it.replaceFirstChar { c -> c.uppercase() }
                 }
 
-            else -> "Type${toString()}"
+            else -> "Type${originalValue.toString()}"
         }
 
     companion object {

@@ -11,10 +11,10 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
 
     fun convert() {
         val baseObjectName = source.name.removeSuffix(".yaml")
-        val parserMap: Map<Any, Any> = Yaml().load(source.inputStream())
+        val parserMap: Map<Any?, Any?> = Yaml().load(source.inputStream())
         val ast = convertParserMapToASTObject(parserMap, baseObjectName)
 
-        FileSpec.builder(packageName, baseObjectName)
+        FileSpec.builder(packageName, baseObjectName.asKotlinTypeName().toString())
             .addType(ast.rhyme())
             .build().writeTo(destinationFolder)
     }
@@ -69,7 +69,8 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
                 else -> ASTProperty(
                     key.asKotlinParameterName(),
                     LIST.parameterizedBy(value.first()?.let { it::class.asClassName() }
-                        ?: error("first list item is null")),
+                        ?: ANY.copy(nullable = true)
+                    ),
                     ASTProperty.Expression.ListOfPrimitivesValue(value)
                 )
             }
@@ -77,22 +78,20 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
         })
     }
 
-    private fun convertParserMapToASTObject(parserMap: Map<Any, Any?>, baseObjectName: String): ASTObject {
+    private fun convertParserMapToASTObject(parserMap: Map<Any?, Any?>, baseObjectName: String): ASTObject {
         val (primitives, maps, lists, properties) = partitionTypesAndGenerateProperties(parserMap)
         return ASTObject(
             name = baseObjectName.asKotlinTypeName(),
             properties = properties,
             children = maps.map { (key, value) ->
-                convertMapToASTDataClass(
-                    value.mapKeys { (vKey, _) -> vKey.toString() },
-                    key.asKotlinTypeName()
-                )
+                @Suppress("UNCHECKED_CAST")
+                convertMapToASTDataClass(value as Map<Any?, Any?>, key.asKotlinTypeName())
             } + lists.filter { (_, value) -> value.firstOrNull() is Map<*, *> }
                 .map { (key, value) -> convertListToASTDataClass(value, key.asKotlinTypeName(singularize = true)) }
         )
     }
 
-    private fun convertMapToASTDataClass(parserMap: Map<Any, Any?>, dataClassType: KotlinTypeName): ASTDataClass {
+    private fun convertMapToASTDataClass(parserMap: Map<Any?, Any?>, dataClassType: KotlinTypeName): ASTDataClass {
         val (primitives, maps, lists, properties) = partitionTypesAndGenerateProperties(parserMap)
         return ASTDataClass(
             name = dataClassType,
@@ -106,10 +105,8 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
                 ASTProperty(it.name, it.type, ASTProperty.Expression.DataClassNoValue)
             },
             children = maps.map { (key, value) ->
-                convertMapToASTDataClass(
-                    value.mapKeys { (vKey, _) -> vKey.toString() },
-                    key.asKotlinTypeName()
-                )
+                @Suppress("UNCHECKED_CAST")
+                convertMapToASTDataClass(value as Map<Any?, Any?>, key.asKotlinTypeName())
             } + lists.filter { (_, value) -> value.firstOrNull() is Map<*, *> }
                 .map { (key, value) -> convertListToASTDataClass(value, key.asKotlinTypeName(singularize = true)) },
             companionObject = ASTCompanionObject(
