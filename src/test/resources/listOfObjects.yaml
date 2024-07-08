@@ -1,0 +1,87 @@
+solarSystem:
+  - type: star
+    name: Sun
+    radius-in-km: 0.6963E6
+    emission:
+      spectral-type: G2
+      color: white
+      magnitude: 4.83
+    galactic-orbit:
+      duration-in-yrs: 237E6
+      velocity-in-km-per-s: 251
+  - type: planet
+    name: Mercury
+    radius-in-km: 2439.7
+    albedo: 0.142
+    orbit:
+      semi-major-axis-in-au: 0.387088
+      eccentricity: 0.20563
+  - type: planet
+    name: Venus
+    radius-in-km: 6051.8
+    orbit:
+      semi-major-axis-in-au: 0.723332
+      eccentricity: 0.006772
+    albedo: 0.689
+    atmosphere:
+      - name: carbon dioxide
+        fraction: 0.97
+      - name: nitrogen
+        fraction: 0.03
+  - type: planet
+    name: Earth
+    color: blue
+    radius-in-km: 6371
+    orbit:
+      semi-major-axis-in-au: 1.0
+      eccentricity: 0.0167086
+    albedo: 0.689
+    atmosphere:
+      - name: nitrogen
+        fraction: 0.78
+      - name: oxygen
+        fraction: 0.21
+      - name: water
+        fraction: 0.01
+    moons:
+      - Luna
+  - type: planet
+    name: Mars
+    color: red
+    radius-in-km: 3389.5
+    orbit:
+      semi-major-axis-in-au: 1.523681
+      eccentricity: 0.0934
+    albedo: 0.170
+    atmosphere:
+      - name: carbon dioxide
+        fraction: 0.96
+      - name: argon
+        fraction: 0.02
+      - name: nitrogen
+        fraction: 0.02
+    moons:
+      - Phobos
+      - Deimos
+  - type: asteroids
+    name: Main Asteroid Belt
+    parts:
+      - name: inner
+        au:
+          from: 2.0
+          to: 2.5
+        planets:
+          - Vesta
+      - name: middle
+        au:
+          from: 2.5
+          to: 3.0
+        planets:
+          - Ceres
+          - Pallas
+      - name: outer
+        au:
+          from: 3.0
+          to: 3.5
+        planets:
+          - Hygiea
