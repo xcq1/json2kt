@@ -10,5 +10,3 @@ mapping-on-numbers:
   2: "two"
   1: "one"
   0: "we have lift-off"
-#nested-list:
-#  - - - - - - - - - - - - - - - - - - - - - - - - worst: "idea ever"
