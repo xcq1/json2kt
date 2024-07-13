@@ -1,101 +1,226 @@
 package com.xcq1
 
 import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 
-interface ASTNode<T> {
-    fun rhyme(): T
-}
+sealed interface ASTNode {
+    val name: KotlinParameterName
+    fun merge(other: ASTNode): ASTNode
 
-data class ASTProperty<E : ASTProperty.Expression>(
-    val name: KotlinParameterName,
-    val type: TypeName,
-    val expression: E
-) : ASTNode<PropertySpec> {
-    sealed interface Expression {
-        data class PrimitiveValue(val format: String, val value: Any?) : Expression
-        data class ComplexValue(val format: String, val values: Collection<Any?>) : Expression
-        data class DataClassInstanceValue(val dataClassType: KotlinTypeName) : Expression
-        data class ListOfDataClassInstancesValue(val dataclassType: KotlinTypeName, val instanceCount: Int) : Expression
-        data class ListOfPrimitivesValue(val primitives: List<*>) : Expression
-        data object DataClassNoValue : Expression
-    }
-
-    override fun rhyme() = PropertySpec.builder(name.toString(), type).run {
-        when (expression) {
-            is Expression.DataClassNoValue ->
-                initializer(name.toString()).build()
-
-            is Expression.DataClassInstanceValue ->
-                initializer("%L", "${expression.dataClassType}.instance").build()
-
-            is Expression.ListOfDataClassInstancesValue ->
-                initializer(
-                    when (expression.instanceCount) {
-                        0 -> "emptyList()"
-                        else -> "listOf(" + "%L, ".repeat(expression.instanceCount - 1) + "%L)"
-                    },
-                    *(0 until expression.instanceCount).map { "${expression.dataclassType}.instance$it" }
-                        .toTypedArray()
-                ).build()
-
-            is Expression.ListOfPrimitivesValue ->
-                initializer(
-                    when (expression.primitives.size) {
-                        0 -> "emptyList()"
-                        else -> if (expression.primitives.first() is String)
-                            "listOf(" + "%S, ".repeat(expression.primitives.size - 1) + "%S)"
-                        else
-                            "listOf(" + "%L, ".repeat(expression.primitives.size - 1) + "%L)"
-                    },
-                    *(expression.primitives.map { it.toString() }).toTypedArray()
-                ).build()
-
-            is Expression.PrimitiveValue ->
-                initializer(expression.format, expression.value).build()
-
-            is Expression.ComplexValue ->
-                initializer(expression.format, *expression.values.toTypedArray()).build()
-
-            else -> error("Impossible case reached")
-        }
-    }
+    fun getPoetType(): TypeName
+    fun getPoetCodeBlockToInitProperty(propertyValue: Any?): CodeBlock
 }
 
 data class ASTObject(
-    val name: KotlinTypeName,
-    val properties: List<ASTProperty<out ASTProperty.Expression>>,
-    val children: List<ASTDataClass>
-) : ASTNode<TypeSpec> {
-    override fun rhyme() = TypeSpec.objectBuilder(name.toString())
-        .addProperties(properties.map { it.rhyme() })
-        .addTypes(children.map { it.rhyme() })
-        .build()
-}
-
-data class ASTDataClass(
-    val name: KotlinTypeName,
-    val valueParameters: List<ASTProperty<ASTProperty.Expression.DataClassNoValue>>,
-    val children: List<ASTDataClass>,
-    val companionObject: ASTCompanionObject
-) : ASTNode<TypeSpec> {
-    override fun rhyme(): TypeSpec =
-        TypeSpec.classBuilder(name.toString()).addModifiers(KModifier.DATA)
-            .addProperties(valueParameters.map { it.rhyme() })
-            .primaryConstructor(
-                FunSpec.constructorBuilder().addModifiers(KModifier.PRIVATE)
-                    .addParameters(valueParameters.map { ParameterSpec.builder(it.name.toString(), it.type).build() })
-                    .build()
+    override val name: KotlinParameterName,
+    val typeName: KotlinTypeName,
+    val nullable: Boolean,
+    val properties: Map<KotlinParameterName, ASTNode>
+) : ASTNode {
+    override fun merge(other: ASTNode): ASTNode =
+        when (other) {
+            is ASTList -> error("Cannot merge list with object under $typeName")
+            is ASTNull -> copy(nullable = true)
+            is ASTObject -> copy(
+                nullable = nullable || other.nullable,
+                properties = (properties.keys + other.properties.keys).associateWith {
+                    (properties[it] ?: ASTNull(it)).merge(other.properties[it] ?: ASTNull(it))
+                }
             )
-            .addTypes(children.map { it.rhyme() })
-            .addType(companionObject.rhyme())
-            .build()
+
+            is ASTPrimitive -> error("Cannot merge primitive with object under $typeName")
+        }
+
+    override fun getPoetType(): TypeName = ClassName("", typeName.toString()).copy(nullable = nullable)
+
+    @OptIn(ExperimentalStdlibApi::class)
+    override fun getPoetCodeBlockToInitProperty(propertyValue: Any?): CodeBlock =
+        if (nullable && propertyValue == null)
+            CodeBlock.of("null")
+        else {
+            require(propertyValue is Map<*, *>) { "Cannot get object code block without Map value" }
+            if (propertyValue.isEmpty()) // data object
+                CodeBlock.of("%L", typeName.toString())
+            else
+                CodeBlock.of("%L.i%L", typeName.toString(), propertyValue.hashCode().toHexString())
+        }
+
+    private fun determineSubObjectsOfNode(node: ASTNode, value: Any?): Pair<ASTObject, Collection<Any?>>? =
+        when {
+            node is ASTObject && value != null -> Pair(node, listOf(value))
+            node is ASTList && value != null && value is List<*> && value.isNotEmpty() ->
+                value.mapNotNull { determineSubObjectsOfNode(node.of, it) }
+                    .reduceOrNull { (aNode, aValues), (bNode, bValues) ->
+                        require(aNode == bNode) { "List with different ASTObjects inside?" }
+                        aNode to (aValues + bValues)
+                    }
+
+            else -> null
+        }
+
+    fun toPoetObject(value: Map<Any?, Any?>): TypeSpec.Builder =
+        TypeSpec.objectBuilder(typeName.toString())
+            .addProperties(properties
+                .map { (propKey, propNode) ->
+                    PropertySpec.builder(propNode.name.toString(), propNode.getPoetType())
+                        .initializer(
+                            propNode.getPoetCodeBlockToInitProperty(
+                                propertyValue = value[propKey.originalValue]
+                            )
+                        )
+                        .build()
+                })
+            .addTypes(properties.mapNotNull { (nodeName, node) ->
+                determineSubObjectsOfNode(
+                    node,
+                    value[nodeName.originalValue]
+                )?.let { (subObjectNode, subObjectValues) ->
+                    @Suppress("UNCHECKED_CAST")
+                    subObjectNode.toPoetDataClass(values = subObjectValues as Collection<Map<Any?, Any?>>).build()
+                }
+            })
+
+    @OptIn(ExperimentalStdlibApi::class)
+    fun toPoetDataClass(values: Collection<Map<Any?, Any?>>): TypeSpec.Builder =
+        if (properties.isEmpty())
+            TypeSpec.objectBuilder(typeName.toString()).addModifiers(KModifier.DATA)
+                .addProperty(getIdProperty())
+        else
+            TypeSpec.classBuilder(typeName.toString()).addModifiers(KModifier.DATA)
+                .addProperties(properties
+                    .map { (name, node) ->
+                        PropertySpec.builder(node.name.toString(), node.getPoetType())
+                            .initializer(node.name.toString())
+                            .build()
+                    } + getIdProperty())
+                .primaryConstructor(
+                    FunSpec.constructorBuilder().addModifiers(KModifier.PRIVATE)
+                        .addParameters(properties
+                            .map { (name, node) ->
+                                ParameterSpec.builder(node.name.toString(), node.getPoetType())
+                                    .build()
+                            })
+                        .build()
+                )
+                .addTypes(properties.mapNotNull { (nodeName, node) ->
+                    values.mapNotNull {
+                        determineSubObjectsOfNode(
+                            node,
+                            it[nodeName.originalValue]
+                        )
+                    }.reduceOrNull { (aNode, aValues), (bNode, bValues) ->
+                        require(aNode == bNode) { "List with different ASTObjects inside?" }
+                        aNode to (aValues + bValues)
+                    }?.let { (subObjectNode, subObjectValues) ->
+                        @Suppress("UNCHECKED_CAST")
+                        subObjectNode.toPoetDataClass(values = subObjectValues as Collection<Map<Any?, Any?>>).build()
+                    }
+                })
+                .addType(
+                    TypeSpec.companionObjectBuilder()
+                        .addProperties(
+                            values.map { value ->
+                                PropertySpec.builder(
+                                    "i${value.hashCode().toHexString()}",
+                                    ClassName("", typeName.toString())
+                                ).initializer(
+                                    "%L(%L)",
+                                    typeName.toString(),
+                                    properties.entries.map { (propKey, propNode) ->
+                                        propNode.getPoetCodeBlockToInitProperty(
+                                            propertyValue = value[propKey.originalValue]
+                                        )
+                                    }.joinToCode()
+                                ).build()
+                            }
+                        )
+                        .build()
+                )
+
+    private fun getIdProperty() =
+        PropertySpec.builder(properties.keys.map { it.toString() }.fold("id") { acc, next ->
+            if (acc == next)
+                "_$acc"
+            else
+                acc
+        }, STRING).initializer("%S", name.originalValue).build()
 }
 
-data class ASTCompanionObject(
-    val properties: List<ASTProperty<ASTProperty.Expression>>
-) : ASTNode<TypeSpec> {
-    override fun rhyme(): TypeSpec =
-        TypeSpec.companionObjectBuilder()
-            .addProperties(properties.map { it.rhyme() })
-            .build()
+data class ASTList(
+    override val name: KotlinParameterName,
+    val of: ASTNode,
+    val nullable: Boolean
+) : ASTNode {
+    override fun merge(other: ASTNode): ASTNode =
+        when (other) {
+            is ASTList -> copy(of = of.merge(other.of), nullable = nullable || other.nullable)
+            is ASTNull -> copy(nullable = true)
+            is ASTObject -> error("Cannot merge list with object under ${other.typeName}")
+            is ASTPrimitive -> error("Cannot merge primitive with list under ${other.name}")
+        }
+
+    override fun getPoetType(): TypeName = LIST.parameterizedBy(of.getPoetType()).copy(nullable = nullable)
+    override fun getPoetCodeBlockToInitProperty(propertyValue: Any?): CodeBlock =
+        if (nullable && propertyValue == null)
+            CodeBlock.of("null")
+        else {
+            require(propertyValue is List<*>) { "Cannot get list code block without List value" }
+            val allListValues = propertyValue.map { of.getPoetCodeBlockToInitProperty(it) }
+            CodeBlock.of(
+                "listOf(" + allListValues.joinToCode() + ")"
+            )
+        }
+}
+
+data class ASTPrimitive(
+    override val name: KotlinParameterName,
+    val type: TypeName
+) : ASTNode {
+    companion object {
+        private val numberTypes = setOf(
+            NUMBER, BYTE, SHORT, INT, LONG, DOUBLE, FLOAT
+        )
+    }
+
+    override fun merge(other: ASTNode): ASTNode =
+        when (other) {
+            is ASTList -> error("Cannot merge primitive with list under $name")
+            is ASTNull -> copy(type = type.copy(nullable = true))
+            is ASTObject -> error("Cannot merge primitive with object under $name")
+            is ASTPrimitive -> when {
+                type == other.type -> this
+                type.copy(nullable = true) == other.type.copy(nullable = true) -> copy(type = type.copy(nullable = true))
+
+                type is ClassName && type.copy(nullable = false) in numberTypes &&
+                        other.type is ClassName && other.type.copy(nullable = false) in numberTypes ->
+                    copy(type = NUMBER.copy(nullable = type.isNullable || other.type.isNullable))
+
+                else -> copy(type = ANY.copy(nullable = type.isNullable || other.type.isNullable))
+            }
+        }
+
+    override fun getPoetType(): TypeName = type
+    override fun getPoetCodeBlockToInitProperty(propertyValue: Any?): CodeBlock =
+        when {
+            type.copy(nullable = false) == STRING -> CodeBlock.of("%S", propertyValue)
+            else -> CodeBlock.of("%L", propertyValue)
+        }
+}
+
+data class ASTNull(
+    override val name: KotlinParameterName
+) : ASTNode {
+    override fun merge(other: ASTNode): ASTNode =
+        when (other) {
+            is ASTList -> other.copy(nullable = true)
+            is ASTNull -> this
+            is ASTObject -> other.copy(nullable = true)
+            is ASTPrimitive -> other.copy(type = other.type.copy(nullable = true))
+        }
+
+    override fun getPoetType(): TypeName = ANY.copy(nullable = true)
+    override fun getPoetCodeBlockToInitProperty(propertyValue: Any?): CodeBlock {
+        require(propertyValue == null) { "Cannot get null code block without null value" }
+        return CodeBlock.of("null")
+    }
 }
