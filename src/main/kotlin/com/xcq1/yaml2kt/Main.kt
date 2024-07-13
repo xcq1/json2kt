@@ -1,4 +1,4 @@
-package com.xcq1
+package com.xcq1.yaml2kt
 
 import java.io.File
 import kotlin.system.exitProcess

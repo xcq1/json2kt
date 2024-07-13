@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm")
 }
 
-group = "org.example"
+group = "com.xcq1.yaml2kt"
 version = "1.0-SNAPSHOT"
 
 repositories {

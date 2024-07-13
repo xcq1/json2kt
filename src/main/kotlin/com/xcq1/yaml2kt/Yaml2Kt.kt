@@ -1,23 +1,27 @@
-package com.xcq1
+package com.xcq1.yaml2kt
 
 import com.squareup.kotlinpoet.FileSpec
 import com.squareup.kotlinpoet.asTypeName
-import com.xcq1.KotlinParameterName.Companion.asKotlinParameterName
-import com.xcq1.KotlinTypeName.Companion.asKotlinTypeName
+import com.xcq1.yaml2kt.KotlinParameterName.Companion.asKotlinParameterName
+import com.xcq1.yaml2kt.KotlinTypeName.Companion.asKotlinTypeName
 import org.yaml.snakeyaml.Yaml
 import java.io.File
 
-class Yaml2Kt(private val source: File, private val destinationFolder: File, private val packageName: String = "") {
-
+class Yaml2Kt(
+    private val source: File,
+    private val destinationFolder: File,
+    private val packageName: String = "",
+    private val preprocessYaml: (Map<Any?, Any?>) -> Map<Any?, Any?> = { it }
+) {
     fun convert() {
         val baseObjectName = source.name.removeSuffix(".yaml")
-        val parserMap: Map<Any?, Any?> = Yaml().load(source.inputStream())
+        val parserMap: Map<Any?, Any?> = preprocessYaml(Yaml().load(source.inputStream()))
         val ast = buildASTTypeMap(baseObjectName, parserMap)
 
         require(ast is ASTObject) { "Map object without ASTObject in tree" }
 
         FileSpec.builder(packageName, baseObjectName.asKotlinTypeName().toString())
-            .addType(ast.toPoetObject(parserMap as Map<Any?, Any?>).build())
+            .addType(ast.toPoetObject(parserMap).build())
             .build().writeTo(destinationFolder)
     }
 
@@ -32,7 +36,8 @@ class Yaml2Kt(private val source: File, private val destinationFolder: File, pri
                         subKey,
                         subValue
                     )
-                }.toMap()
+                }.toMap(),
+                packageName
             )
 
             is List<*> -> ASTList(

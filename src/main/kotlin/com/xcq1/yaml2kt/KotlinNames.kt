@@ -1,4 +1,4 @@
-package com.xcq1
+package com.xcq1.yaml2kt
 
 
 @JvmInline

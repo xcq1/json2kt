@@ -2,8 +2,8 @@ plugins {
     kotlin("jvm") version "2.0.0"
 }
 
-group = "com.xcq1"
-version = "0.0.1-SNAPSHOT"
+group = "com.xcq1.yaml2kt"
+version = "0.1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()

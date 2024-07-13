@@ -1,4 +1,4 @@
-import com.xcq1.Yaml2Kt
+import com.xcq1.yaml2kt.Yaml2Kt
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.datatest.withData
 import java.io.File

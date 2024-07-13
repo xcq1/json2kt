@@ -1,4 +1,4 @@
-package com.xcq1
+package com.xcq1.yaml2kt
 
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
@@ -15,7 +15,8 @@ data class ASTObject(
     override val name: KotlinParameterName,
     val typeName: KotlinTypeName,
     val nullable: Boolean,
-    val properties: Map<KotlinParameterName, ASTNode>
+    val properties: Map<KotlinParameterName, ASTNode>,
+    val packageName: String
 ) : ASTNode {
     override fun merge(other: ASTNode): ASTNode =
         when (other) {
@@ -31,7 +32,7 @@ data class ASTObject(
             is ASTPrimitive -> error("Cannot merge primitive with object under $typeName")
         }
 
-    override fun getPoetType(): TypeName = ClassName("", typeName.toString()).copy(nullable = nullable)
+    override fun getPoetType(): TypeName = ClassName(packageName, typeName.toString()).copy(nullable = nullable)
 
     @OptIn(ExperimentalStdlibApi::class)
     override fun getPoetCodeBlockToInitProperty(propertyValue: Any?): CodeBlock =
@@ -122,7 +123,7 @@ data class ASTObject(
                             values.map { value ->
                                 PropertySpec.builder(
                                     "i${value.hashCode().toHexString()}",
-                                    ClassName("", typeName.toString())
+                                    ClassName(packageName, typeName.toString())
                                 ).initializer(
                                     "%L(%L)",
                                     typeName.toString(),
